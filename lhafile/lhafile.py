@@ -139,12 +139,17 @@ class LhaInfo(object):
          self.header_offset, self.file_offset, self.CRC, self.compress_size,
          self.file_size) = state
 
+    def is_dir(self):
+        """Return True if this archive member is a directory."""
+        return self.filename[-1] == '/'
+
 
 class LhaFile(object):
     """
     """
 
     SUPPORTED_COMPRESS_TYPE = (b'-lhd-', b'-lh0-', b'-lh5-', b'-lh6-', b'-lh7-')
+    _windows_illegal_name_trans_table = None
 
     def __init__(self, file, mode="r", compression=None, callback=None, args=None):
         """ Open the LZH file """
@@ -389,5 +394,99 @@ class LhaFile(object):
         else:
             raise RuntimeError("Unsupport format")
         return bytes
+
+    def extract(self, member, path=None):
+        """Extract a member from the archive to the current working directory,
+           using its full name. Its file information is extracted as accurately
+           as possible. `member' may be a filename or a LhaInfo object. You can
+           specify a different directory using `path'.
+        """
+        if path is None:
+            path = os.getcwd()
+        else:
+            path = os.fspath(path)
+
+        return self._extract_member(member, path)
+
+    def extractall(self, path=None, members=None):
+        """Extract all members from the archive to the current working
+           directory. `path' specifies a different directory to extract to.
+           `members' is optional and must be a subset of the list returned
+           by namelist().
+        """
+        if members is None:
+            members = self.namelist()
+
+        if path is None:
+            path = os.getcwd()
+        else:
+            path = os.fspath(path)
+
+        for lhainfo in members:
+            self._extract_member(lhainfo, path)
+
+    @classmethod
+    def _sanitize_windows_name(cls, arcname, pathsep):
+        """Replace bad characters and remove trailing dots from parts."""
+        table = cls._windows_illegal_name_trans_table
+        if not table:
+            illegal = ':<>|"?*'
+            table = str.maketrans(illegal, '_' * len(illegal))
+            cls._windows_illegal_name_trans_table = table
+        arcname = arcname.translate(table)
+        # remove trailing dots
+        arcname = (x.rstrip('.') for x in arcname.split(pathsep))
+        # rejoin, removing empty parts.
+        arcname = pathsep.join(x for x in arcname if x)
+        return arcname
+
+    def _extract_member(self, member, targetpath):
+        """Extract the ZipInfo object 'member' to a physical
+           file on the path targetpath.
+        """
+        if not isinstance(member, LhaInfo):
+            member = self.getinfo(member)
+
+        # build the destination pathname, replacing
+        # forward slashes to platform specific separators.
+        arcname = member.filename.replace('/', os.path.sep)
+
+        if os.path.altsep:
+            arcname = arcname.replace(os.path.altsep, os.path.sep)
+        # interpret absolute pathname as relative, remove drive letter or
+        # UNC path, redundant separators, "." and ".." components.
+        arcname = os.path.splitdrive(arcname)[1]
+        invalid_path_parts = ('', os.path.curdir, os.path.pardir)
+        arcname = os.path.sep.join(x for x in arcname.split(os.path.sep)
+                                   if x not in invalid_path_parts)
+        if os.path.sep == '\\':
+            # filter illegal characters on Windows
+            arcname = self._sanitize_windows_name(arcname, os.path.sep)
+
+        targetpath = os.path.join(targetpath, arcname)
+        targetpath = os.path.normpath(targetpath)
+
+        # Create all upper directories if necessary.
+        upperdirs = os.path.dirname(targetpath)
+        if upperdirs and not os.path.exists(upperdirs):
+            os.makedirs(upperdirs)
+
+        if member.is_dir():
+            if not os.path.isdir(targetpath):
+                os.mkdir(targetpath)
+            return targetpath
+
+        with open(targetpath, "wb") as target:
+            target.write(self.read(member.filename))
+
+        return targetpath
+
+    def getinfo(self, name):
+        """Return the instance of LhaInfo given 'name'."""
+        info = self.NameToInfo.get(name)
+        if info is None:
+            raise KeyError(
+                'There is no item named %r in the archive' % name)
+        return info
 
 Lhafile = LhaFile
