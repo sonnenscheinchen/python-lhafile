@@ -314,7 +314,7 @@ class LhaFile(object):
             filename = os.path.join(directory, filename)
 
         # OSIDs based on
-        # http://dangan.g.dgdg.jp/en/Content/Program/Java/jLHA/Notes/Notes.html
+        # http://dangan.g.dgdg.jp/en/Content/Program/Java/jLHA/Notes/OSID.html
         os_identifiers = { 0x41: 'Amiga', 0x4D: 'MS-DOS', 0x32: 'OS/2', 0x39: 'OS-9',
                           0x4B: 'OS/68K', 0x33: 'OS/386', 0x48: 'Human68K', 0x55: 'UNIX',
                           0x43: 'CP/M', 0x46: 'FLEX', 0x6D: 'Macintosh', 0x52: 'Runser',
@@ -395,7 +395,7 @@ class LhaFile(object):
             raise RuntimeError("Unsupport format")
         return bytes
 
-    def extract(self, member, path=None):
+    def extract(self, member, path=None, metadata=False):
         """Extract a member from the archive to the current working directory,
            using its full name. Its file information is extracted as accurately
            as possible. `member' may be a filename or a LhaInfo object. You can
@@ -406,9 +406,9 @@ class LhaFile(object):
         else:
             path = os.fspath(path)
 
-        return self._extract_member(member, path)
+        return self._extract_member(member, path, metadata)
 
-    def extractall(self, path=None, members=None):
+    def extractall(self, path=None, members=None, metadata=False):
         """Extract all members from the archive to the current working
            directory. `path' specifies a different directory to extract to.
            `members' is optional and must be a subset of the list returned
@@ -423,7 +423,7 @@ class LhaFile(object):
             path = os.fspath(path)
 
         for lhainfo in members:
-            self._extract_member(lhainfo, path)
+            self._extract_member(lhainfo, path, metadata)
 
     @classmethod
     def _sanitize_windows_name(cls, arcname, pathsep):
@@ -440,7 +440,7 @@ class LhaFile(object):
         arcname = pathsep.join(x for x in arcname if x)
         return arcname
 
-    def _extract_member(self, member, targetpath):
+    def _extract_member(self, member, targetpath, metadata):
         """Extract the ZipInfo object 'member' to a physical
            file on the path targetpath.
         """
@@ -478,6 +478,9 @@ class LhaFile(object):
 
         with open(targetpath, "wb") as target:
             target.write(self.read(member.filename))
+        
+        if metadata in (True, 'auto'):
+            self._write_metadata(member, targetpath, metadata)
 
         return targetpath
 
@@ -488,5 +491,18 @@ class LhaFile(object):
             raise KeyError(
                 'There is no item named %r in the archive' % name)
         return info
+
+    def _write_metadata(self, member, targetpath, force):
+        """Write FS-UAE file metadata"""
+        filenote = member.comment or ''
+        protection_flags = member.flag_bits or '----rwed'
+        if force is not True:
+            if filenote == '' and protection_flags == '----rwed':
+                return
+        file_date = member.date_time.strftime('%F %T.00')
+        metadata_string = '{0} {1} {2}\n'.format(
+                            protection_flags, file_date, filenote)
+        with open('{0}.uaem'.format(targetpath), 'wt') as f:
+            f.write(metadata_string)
 
 Lhafile = LhaFile
