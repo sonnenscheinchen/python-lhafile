@@ -502,7 +502,8 @@ class LhaFile(object):
         file_date = member.date_time.strftime('%F %T.00')
         metadata_string = '{0} {1} {2}\n'.format(
                             protection_flags, file_date, filenote)
-        with open('{0}.uaem'.format(targetpath), 'wt') as f:
+        with open('{0}.uaem'.format(targetpath), 'wt',
+                  encoding='ISO-8859-1') as f:
             f.write(metadata_string)
 
 Lhafile = LhaFile
