@@ -441,15 +441,16 @@ class LhaFile(object):
         return arcname
 
     def _extract_member(self, member, targetpath, metadata):
-        """Extract the ZipInfo object 'member' to a physical
+        """Extract the LhaInfo object 'member' to a physical
            file on the path targetpath.
         """
         if not isinstance(member, LhaInfo):
             member = self.getinfo(member)
 
         # build the destination pathname, replacing
-        # forward slashes to platform specific separators.
-        arcname = member.filename.replace('/', os.path.sep)
+        # forward- and back-slashes to platform specific separators.
+        arcname = member.filename.replace(
+            '/', os.path.sep).replace('\\', os.path.sep)
 
         if os.path.altsep:
             arcname = arcname.replace(os.path.altsep, os.path.sep)
