@@ -1,3 +1,12 @@
+Changes in this branch:
+- Support for Amiga protection bits
+- Support for archive create system
+- extract() and extractall() methods based on zipfile.py
+
+Upstream README:
+
+
+
 # LHA archive support for Python
 
 The `lhafile` package is a python extension that handles .lha archives, with
